@@ -25,7 +25,14 @@ function findYtDlp() {
 async function getVideoMetadata(url) {
     return new Promise((resolve, reject) => {
         // First, check if it's a playlist using flat-playlist
-        const args = ['--dump-single-json', '--flat-playlist', '--no-warnings', url];
+        const args = [
+            '--dump-single-json',
+            '--flat-playlist',
+            '--no-warnings',
+            '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            url
+        ];
+        console.log(`Fetching metadata for: ${url}`);
         const ytdlp = spawn(findYtDlp(), args);
         let stdout = '';
         let stderr = '';
@@ -41,7 +48,11 @@ async function getVideoMetadata(url) {
 
         ytdlp.on('close', code => {
             clearTimeout(timeout);
-            if (code !== 0) return reject(new Error(stderr || 'Failed to fetch metadata'));
+            if (code !== 0) {
+                console.error(`Metadata fetch failed for ${url}. Exit code: ${code}`);
+                console.error(`Stderr: ${stderr}`);
+                return reject(new Error(stderr || 'Failed to fetch metadata'));
+            }
             if (!stdout) return reject(new Error('No metadata received'));
 
             try {
@@ -77,6 +88,8 @@ async function getVideoMetadata(url) {
                     });
                 }
             } catch (e) {
+                console.error('JSON Parse Error:', e);
+                console.error('Stdout was:', stdout);
                 reject(new Error('Parse error'));
             }
         });
@@ -93,6 +106,8 @@ async function downloadVideo(url, format, quality, jobId) {
         '--newline',
         '-N', '4', // Use 4 concurrent connections
         '--resize-buffer', // Resize buffer for speed
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        '--force-ipv4',
         url
     ];
 
@@ -111,7 +126,12 @@ async function downloadVideo(url, format, quality, jobId) {
             const m = output.match(/(\d+(?:\.\d+)?)%/);
             if (m) {
                 const progress = Math.min(100, Math.floor(parseFloat(m[1])));
-                updateJobProgress(jobId, progress, 'Downloading...');
+                updateJobProgress(jobId, progress, progress === 100 ? 'Finalizing...' : 'Downloading...');
+            }
+
+            // Detect merging/conversion phase
+            if (output.includes('[Merger]') || output.includes('[Fixup]')) {
+                updateJobProgress(jobId, 100, 'Converting & Merging...');
             }
         });
 
@@ -136,12 +156,14 @@ async function downloadVideo(url, format, quality, jobId) {
                 const files = await fs.readdir(tempDir);
                 const file = files.find(f => f.startsWith(jobId));
                 if (!file) {
+                    console.error(`[${jobId}] File not found in ${tempDir}. Files: ${files.join(', ')}`);
                     updateJobStatus(jobId, 'failed');
-                    return reject(new Error('File not found'));
+                    return reject(new Error('File not found after download'));
                 }
                 updateJobComplete(jobId, file);
                 resolve(path.join(tempDir, file));
             } catch (e) {
+                console.error(`[${jobId}] File check error:`, e);
                 updateJobStatus(jobId, 'failed');
                 reject(e);
             }

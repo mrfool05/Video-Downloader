@@ -5,7 +5,7 @@ FROM node:18-alpine
 RUN apk add --no-cache python3 py3-pip ffmpeg
 
 # Install yt-dlp via pip (ensure it's available in PATH)
-RUN pip3 install yt-dlp --break-system-packages
+RUN pip3 install -U yt-dlp --break-system-packages
 
 # Create app directory
 WORKDIR /usr/src/app
