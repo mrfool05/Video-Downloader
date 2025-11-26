@@ -100,14 +100,33 @@ async function downloadVideo(url, format, quality, jobId) {
     if (quality === 'audio') args.splice(3, 0, '-x', '--audio-format', 'mp3');
 
     return new Promise((resolve, reject) => {
+        console.log(`Starting download for job ${jobId} with args:`, args.join(' '));
         const ytdlp = spawn(findYtDlp(), args);
 
         ytdlp.stdout.on('data', data => {
-            const m = data.toString().match(/(\d+\.\d+)%/);
-            if (m) updateJobProgress(jobId, Math.floor(parseFloat(m[1])), 'Downloading...');
+            const output = data.toString();
+            // console.log(`[${jobId}] stdout:`, output); // Uncomment for verbose logs
+
+            // Match percentage (e.g., " 23.5%" or " 100%")
+            const m = output.match(/(\d+(?:\.\d+)?)%/);
+            if (m) {
+                const progress = Math.min(100, Math.floor(parseFloat(m[1])));
+                updateJobProgress(jobId, progress, 'Downloading...');
+            }
+        });
+
+        ytdlp.stderr.on('data', data => {
+            console.error(`[${jobId}] stderr:`, data.toString());
+        });
+
+        ytdlp.on('error', (err) => {
+            console.error(`[${jobId}] Spawn error:`, err);
+            updateJobStatus(jobId, 'failed');
+            reject(new Error(`Failed to start download process: ${err.message}`));
         });
 
         ytdlp.on('close', async code => {
+            console.log(`[${jobId}] Process exited with code ${code}`);
             if (code !== 0) {
                 updateJobStatus(jobId, 'failed');
                 return reject(new Error('Download failed'));
