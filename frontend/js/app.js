@@ -200,7 +200,17 @@ async function validateAndFetchVideo() {
             body: JSON.stringify({ url }),
         });
 
-        const data = await response.json();
+        const contentType = response.headers.get('content-type');
+        let data;
+
+        if (contentType && contentType.includes('application/json')) {
+            data = await response.json();
+        } else {
+            // If not JSON, it's likely a server error page (HTML) or empty
+            const text = await response.text();
+            console.error('Non-JSON response:', text);
+            throw new Error(`Server returned unexpected response: ${response.status} ${response.statusText}`);
+        }
 
         if (!response.ok) throw new Error(data.error || 'Failed to validate URL');
 

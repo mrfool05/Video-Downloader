@@ -30,10 +30,17 @@ async function getVideoMetadata(url) {
         let stdout = '';
         let stderr = '';
 
+        // Set a timeout of 30 seconds
+        const timeout = setTimeout(() => {
+            ytdlp.kill();
+            reject(new Error('Metadata fetch timed out (30s limit)'));
+        }, 30000);
+
         ytdlp.stdout.on('data', d => stdout += d);
         ytdlp.stderr.on('data', d => stderr += d);
 
         ytdlp.on('close', code => {
+            clearTimeout(timeout);
             if (code !== 0) return reject(new Error(stderr || 'Failed to fetch metadata'));
             if (!stdout) return reject(new Error('No metadata received'));
 
