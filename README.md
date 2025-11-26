@@ -1,4 +1,4 @@
-🎥 Bippi Downloader
+🎥 **Bippi Downloader**
 
 Bippi Downloader is a fast, modern, and easy-to-use web-based video downloader that allows users to quickly fetch and save videos from supported platforms. It features a clean UI, smooth user experience, and a privacy-focused design.
 
