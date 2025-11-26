@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: bippi-downloader
+    env: docker
+    plan: free
+    branch: main
+    repo: https://github.com/your-username/bippi-downloader # You will need to update this
+    healthCheckPath: /
+    envVars:
+      - key: PORT
+        value: 3000

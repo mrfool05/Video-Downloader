@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="Bippi Downloader - Download videos from various platforms in multiple formats and quality options">
+    <title>Bippi Downloader - Fast & Secure Video Downloads</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <!-- Animated Background -->
+    <canvas id="bgCanvas" class="bg-canvas"></canvas>
+    <div class="bg-overlay"></div>
+
+    <!-- Header -->
+    <header class="header glass-header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <div class="logo-icon-wrapper">
+                        <i class="fas fa-bolt logo-icon"></i>
+                    </div>
+                    <h1>Bippi <span class="text-gradient">Downloader</span></h1>
+                </div>
+                <div class="header-actions">
+                    <button id="themeToggle" class="theme-toggle" aria-label="Toggle Dark Mode">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                    <nav class="nav">
+                        <a href="index.html">Home</a>
+                        <a href="pages/terms.html">Terms</a>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <div class="container">
+            <!-- Hero Section -->
+            <section class="hero">
+                <h2 class="hero-title">Download Videos <span class="text-gradient">Instantly</span></h2>
+                <p class="hero-subtitle">Fast, secure, and private video downloads from any supported platform</p>
+            </section>
+
+            <!-- Downloader Card -->
+            <div class="downloader-card">
+                <!-- URL Input Section -->
+                <section class="download-section">
+                    <div class="input-container">
+                        <input type="text" id="videoUrl" class="url-input" placeholder="Paste video link here..."
+                            aria-label="Video URL" autocomplete="off">
+                        <button id="validateBtn" class="btn btn-primary btn-large">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                    <div id="errorMessage" class="error-message hidden"></div>
+                </section>
+
+                <!-- Video Preview Section -->
+                <section id="videoPreview" class="video-preview hidden">
+                    <div class="preview-content">
+                        <div class="preview-thumbnail">
+                            <img id="thumbnailImg" src="" alt="Video thumbnail">
+                            <div class="preview-duration" id="videoDuration"></div>
+                        </div>
+                        <div class="preview-info">
+                            <h3 id="videoTitle" class="preview-title"></h3>
+                            <div class="preview-meta">
+                                <span id="videoMeta"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Format & Quality Selection -->
+                    <div class="download-options">
+                        <div class="option-group">
+                            <label for="formatSelect">Format</label>
+                            <select id="formatSelect" class="select-input">
+                                <option value="mp4">MP4</option>
+                                <option value="webm">WEBM</option>
+                            </select>
+                        </div>
+                        <div class="option-group">
+                            <label for="qualitySelect">Quality</label>
+                            <select id="qualitySelect" class="select-input">
+                                <option value="1080">1080p (Full HD)</option>
+                                <option value="720" selected>720p (HD)</option>
+                                <option value="480">480p (SD)</option>
+                                <option value="audio">Audio Only</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button id="startDownloadBtn" class="btn btn-primary btn-large btn-full">
+                        <i class="fas fa-download"></i> Start Download
+                    </button>
+                </section>
+
+                <!-- Playlist Selection Section -->
+                <section id="playlistSection" class="playlist-section hidden">
+                    <div class="playlist-header">
+                        <h3><i class="fas fa-list"></i> Playlist Found</h3>
+                        <p id="playlistTitle">Playlist Title</p>
+                        <div class="playlist-actions">
+                            <button id="selectAllBtn" class="btn-text-small">Select All</button>
+                            <button id="deselectAllBtn" class="btn-text-small">Deselect All</button>
+                        </div>
+                    </div>
+                    <div id="playlistItems" class="playlist-items">
+                        <!-- Items will be injected here -->
+                    </div>
+                    <div class="playlist-footer">
+                        <span id="selectedCount">0 videos selected</span>
+                        <button id="downloadPlaylistBtn" class="btn btn-primary">Download Selected</button>
+                    </div>
+                </section>
+
+                <!-- Progress Section -->
+                <section id="progressSection" class="progress-section hidden">
+                    <div class="progress-container">
+                        <div class="progress-header">
+                            <span id="progressStatus">Starting download...</span>
+                            <span id="progressPercent">0%</span>
+                        </div>
+                        <div class="progress-bar-track">
+                            <div id="progressFill" class="progress-bar-fill" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Download Ready Section -->
+                <section id="downloadReady" class="download-ready hidden">
+                    <div class="ready-card">
+                        <div class="ready-icon"><i class="fas fa-check"></i></div>
+                        <h3>Your download is ready!</h3>
+                        <p class="ready-message">File will be available for 24 hours</p>
+                        <a id="downloadLink" href="#" download class="btn btn-success btn-large btn-full">
+                            Download Now
+                        </a>
+                        <button id="downloadAnotherBtn" class="btn btn-secondary btn-text">Download Another</button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Recent Downloads Section -->
+            <section id="historySection" class="history-section hidden">
+                <div class="history-header">
+                    <h2><i class="fas fa-history"></i> Recent Downloads</h2>
+                    <button id="clearHistoryBtn" class="btn-text-small">Clear All</button>
+                </div>
+                <div id="historyList" class="history-list">
+                    <!-- History items will be added here -->
+                </div>
+            </section>
+
+            <!-- Features Section -->
+            <section class="features">
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="fas fa-bolt"></i></div>
+                        <h3>Lightning Fast</h3>
+                        <p>Quick processing and high-speed downloads</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="fas fa-shield-alt"></i></div>
+                        <h3>Secure & Private</h3>
+                        <p>No data collection, automatic file deletion</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="fas fa-video"></i></div>
+                        <h3>Multiple Formats</h3>
+                        <p>Choose your preferred format and quality</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="fas fa-mobile-alt"></i></div>
+                        <h3>Mobile Friendly</h3>
+                        <p>Works seamlessly on all devices</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <p class="footer-disclaimer">
+                    This service is for personal use only. Users are responsible for complying with copyright laws.
+                </p>
+                <div class="footer-links">
+                    <a href="pages/terms.html">Terms of Service</a>
+                    <a href="pages/privacy.html">Privacy Policy</a>
+                    <a href="pages/dmca.html">Copyright Claims</a>
+                </div>
+                <p class="footer-copyright">
+                    &copy; 2025 Bippi Downloader. All rights reserved.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/app.js"></script>
+</body>
+
+</html>
