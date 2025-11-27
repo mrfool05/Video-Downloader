@@ -30,6 +30,8 @@ async function getVideoMetadata(url) {
             '--flat-playlist',
             '--no-warnings',
             '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            '--referer', 'https://www.google.com/',
+            '--add-header', 'Accept-Language:en-US,en;q=0.9',
             url
         ];
         console.log(`Fetching metadata for: ${url}`);
@@ -107,6 +109,8 @@ async function downloadVideo(url, format, quality, jobId) {
         '-N', '4', // Use 4 concurrent connections
         '--resize-buffer', // Resize buffer for speed
         '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        '--referer', 'https://www.google.com/',
+        '--add-header', 'Accept-Language:en-US,en;q=0.9',
         '--force-ipv4',
         url
     ];
