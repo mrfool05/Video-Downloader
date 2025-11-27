@@ -29,9 +29,7 @@ async function getVideoMetadata(url) {
             '--dump-single-json',
             '--flat-playlist',
             '--no-warnings',
-            '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            '--referer', 'https://www.google.com/',
-            '--add-header', 'Accept-Language:en-US,en;q=0.9',
+            '--extractor-args', 'youtube:player_client=android',
             url
         ];
         console.log(`Fetching metadata for: ${url}`);
@@ -107,10 +105,10 @@ async function downloadVideo(url, format, quality, jobId) {
         '-o', outputPath,
         '--newline',
         '-N', '4', // Use 4 concurrent connections
+        '--newline',
+        '-N', '4', // Use 4 concurrent connections
         '--resize-buffer', // Resize buffer for speed
-        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        '--referer', 'https://www.google.com/',
-        '--add-header', 'Accept-Language:en-US,en;q=0.9',
+        '--extractor-args', 'youtube:player_client=android', // Impersonate Android app to bypass bot check
         '--force-ipv4',
         url
     ];
