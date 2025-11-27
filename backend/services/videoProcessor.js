@@ -25,7 +25,6 @@ function findYtDlp() {
 function sanitizeUrl(url) {
     try {
         const u = new URL(url);
-        // Remove common tracking parameters
         const paramsToRemove = ['si', 'feature', 'utm_source', 'utm_medium', 'utm_campaign'];
         paramsToRemove.forEach(p => u.searchParams.delete(p));
         return u.toString();
@@ -40,19 +39,15 @@ async function getVideoMetadata(rawUrl) {
 
     const executeFetch = (useCookies) => {
         return new Promise(async (resolve, reject) => {
-            const args = [
-                '--dump-single-json',
-                '--flat-playlist',
-                '--no-warnings',
-                url
-            ];
+            const args = ['--dump-single-json', '--flat-playlist', '--no-warnings', url];
 
             if (isYoutube) {
                 args.splice(args.length - 1, 0, '--extractor-args', 'youtube:player_client=android');
             }
 
             let cookiePath = null;
-            if (useCookies && process.env.COOKIES_CONTENT) {
+            // Only use cookies for YouTube
+            if (useCookies && isYoutube && process.env.COOKIES_CONTENT) {
                 try {
                     const tempId = uuidv4();
                     const tempDir = path.join(__dirname, '../temp');
@@ -62,11 +57,11 @@ async function getVideoMetadata(rawUrl) {
                     await fs.writeFile(cookiePath, process.env.COOKIES_CONTENT);
                     args.splice(args.length - 1, 0, '--cookies', cookiePath);
                 } catch (err) {
-                    console.error('Failed to write cookie file for metadata:', err);
+                    console.error('Failed to write cookie file:', err);
                 }
             }
 
-            console.log(`Fetching metadata for: ${url} (Cookies: ${!!cookiePath})`);
+            console.log(`Fetching metadata for: ${url} (YouTube: ${isYoutube}, Cookies: ${!!cookiePath})`);
             const ytdlp = spawn(findYtDlp(), args);
             let stdout = '';
             let stderr = '';
@@ -85,7 +80,6 @@ async function getVideoMetadata(rawUrl) {
                 if (cookiePath) fs.unlink(cookiePath).catch(() => { });
 
                 if (code !== 0) {
-                    // Special handling: If we used cookies and failed, reject with specific error to trigger retry
                     if (useCookies) {
                         return reject(new Error('RetryWithoutCookies'));
                     }
@@ -97,26 +91,16 @@ async function getVideoMetadata(rawUrl) {
 
                 try {
                     const m = JSON.parse(stdout);
-
                     if (m._type === 'playlist' && m.entries) {
                         const videos = m.entries.map(entry => ({
-                            title: entry.title,
-                            id: entry.id,
-                            duration: entry.duration,
-                            uploader: entry.uploader,
-                            url: entry.url || `https://www.youtube.com/watch?v=${entry.id}`
+                            title: entry.title, id: entry.id, duration: entry.duration,
+                            uploader: entry.uploader, url: entry.url || `https://www.youtube.com/watch?v=${entry.id}`
                         }));
                         resolve({ type: 'playlist', title: m.title, count: m.entries.length, videos: videos });
                     } else {
                         resolve({
-                            type: 'video',
-                            title: m.title,
-                            duration: m.duration,
-                            thumbnail: m.thumbnail,
-                            uploader: m.uploader,
-                            view_count: m.view_count,
-                            description: m.description,
-                            url: url
+                            type: 'video', title: m.title, duration: m.duration, thumbnail: m.thumbnail,
+                            uploader: m.uploader, view_count: m.view_count, description: m.description, url: url
                         });
                     }
                 } catch (e) {
@@ -128,7 +112,6 @@ async function getVideoMetadata(rawUrl) {
     };
 
     try {
-        // Try with cookies first if available
         if (process.env.COOKIES_CONTENT) {
             return await executeFetch(true);
         } else {
@@ -136,7 +119,7 @@ async function getVideoMetadata(rawUrl) {
         }
     } catch (error) {
         if (error.message === 'RetryWithoutCookies') {
-            console.log('⚠️ Metadata fetch with cookies failed. Retrying without cookies...');
+            console.log('⚠️ Retrying without cookies...');
             return await executeFetch(false);
         }
         throw error;
@@ -145,32 +128,24 @@ async function getVideoMetadata(rawUrl) {
 
 async function downloadVideo(rawUrl, format, quality, jobId) {
     const url = sanitizeUrl(rawUrl);
+    const isYoutube = url.includes('youtube.com') || url.includes('youtu.be');
     const tempDir = path.join(__dirname, '../temp');
     const outputPath = path.join(tempDir, `${jobId}.%(ext)s`);
 
-    const args = [
-        '--no-playlist',
-        '-f', getFormatString(format, quality),
-        '-o', outputPath,
-        '--newline',
-        '-N', '4',
-        '--resize-buffer',
-        '--force-ipv4',
-        url
-    ];
+    const args = ['--no-playlist', '-f', getFormatString(format, quality), '-o', outputPath,
+        '--newline', '-N', '4', '--resize-buffer', '--force-ipv4', url];
 
     if (format === 'mp4') args.splice(3, 0, '--merge-output-format', 'mp4');
     if (quality === 'audio') args.splice(3, 0, '-x', '--audio-format', 'mp3');
 
     // Only add Android client for YouTube
-    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+    if (isYoutube) {
         args.splice(args.length - 1, 0, '--extractor-args', 'youtube:player_client=android');
     }
 
-    // Handle Cookies
+    // Only use cookies for YouTube
     let cookiePath = null;
-    if (process.env.COOKIES_CONTENT) {
-        console.log('🍪 Cookies found in environment variables (download). Length:', process.env.COOKIES_CONTENT.length);
+    if (isYoutube && process.env.COOKIES_CONTENT) {
         try {
             cookiePath = path.join(tempDir, `cookies_${jobId}.txt`);
             await fs.writeFile(cookiePath, process.env.COOKIES_CONTENT);
@@ -181,7 +156,7 @@ async function downloadVideo(rawUrl, format, quality, jobId) {
     }
 
     return new Promise((resolve, reject) => {
-        console.log(`Starting download for job ${jobId} with args:`, args.join(' '));
+        console.log(`[${jobId}] Starting download (YouTube: ${isYoutube}, Cookies: ${!!cookiePath})`);
         const ytdlp = spawn(findYtDlp(), args);
 
         ytdlp.stdout.on('data', data => {
