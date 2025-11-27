@@ -23,25 +23,33 @@ function findYtDlp() {
 }
 
 async function getVideoMetadata(url) {
-    return new Promise(async (resolve, reject) => {
-        // Handle Cookies
-        let cookiePath = null;
-        if (process.env.COOKIES_CONTENT) {
-            try {
-                // Create a temp cookie file for this request
-                const tempId = uuidv4();
-                const tempDir = path.join(__dirname, '../temp');
-                // Ensure temp dir exists
-                try { await fs.mkdir(tempDir, { recursive: true }); } catch (e) { }
+    // 1. Define args first
+    const args = [
+        '--dump-single-json',
+        '--flat-playlist',
+        '--no-warnings',
+        '--extractor-args', 'youtube:player_client=android',
+        url
+    ];
 
-                cookiePath = path.join(tempDir, `cookies_meta_${tempId}.txt`);
-                await fs.writeFile(cookiePath, process.env.COOKIES_CONTENT);
-                args.push('--cookies', cookiePath);
-            } catch (err) {
-                console.error('Failed to write cookie file for metadata:', err);
-            }
+    // 2. Handle Cookies
+    let cookiePath = null;
+    if (process.env.COOKIES_CONTENT) {
+        try {
+            const tempId = uuidv4();
+            const tempDir = path.join(__dirname, '../temp');
+            try { await fs.mkdir(tempDir, { recursive: true }); } catch (e) { }
+
+            cookiePath = path.join(tempDir, `cookies_meta_${tempId}.txt`);
+            await fs.writeFile(cookiePath, process.env.COOKIES_CONTENT);
+            // Insert cookies before the URL (last argument)
+            args.splice(args.length - 1, 0, '--cookies', cookiePath);
+        } catch (err) {
+            console.error('Failed to write cookie file for metadata:', err);
         }
+    }
 
+    return new Promise((resolve, reject) => {
         console.log(`Fetching metadata for: ${url}`);
         const ytdlp = spawn(findYtDlp(), args);
         let stdout = '';
@@ -129,19 +137,20 @@ async function downloadVideo(url, format, quality, jobId) {
     if (format === 'mp4') args.splice(3, 0, '--merge-output-format', 'mp4');
     if (quality === 'audio') args.splice(3, 0, '-x', '--audio-format', 'mp3');
 
-    return new Promise(async (resolve, reject) => {
-        // Handle Cookies
-        let cookiePath = null;
-        if (process.env.COOKIES_CONTENT) {
-            try {
-                cookiePath = path.join(tempDir, `cookies_${jobId}.txt`);
-                await fs.writeFile(cookiePath, process.env.COOKIES_CONTENT);
-                args.push('--cookies', cookiePath);
-            } catch (err) {
-                console.error('Failed to write cookie file:', err);
-            }
+    // Handle Cookies
+    let cookiePath = null;
+    if (process.env.COOKIES_CONTENT) {
+        try {
+            cookiePath = path.join(tempDir, `cookies_${jobId}.txt`);
+            await fs.writeFile(cookiePath, process.env.COOKIES_CONTENT);
+            // Insert cookies before the URL (last argument)
+            args.splice(args.length - 1, 0, '--cookies', cookiePath);
+        } catch (err) {
+            console.error('Failed to write cookie file:', err);
         }
+    }
 
+    return new Promise((resolve, reject) => {
         console.log(`Starting download for job ${jobId} with args:`, args.join(' '));
         const ytdlp = spawn(findYtDlp(), args);
 
