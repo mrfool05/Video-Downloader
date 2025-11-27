@@ -48,7 +48,7 @@ router.post('/validate', async (req, res) => {
             console.error('Metadata fetch error:', err);
             return res.status(400).json({
                 valid: false,
-                error: 'Invalid or unsupported video URL. Please ensure the URL is correct and the video is publicly accessible.',
+                error: err.message || 'Invalid or unsupported video URL. Please ensure the URL is correct and the video is publicly accessible.',
             });
         }
     } catch (err) {

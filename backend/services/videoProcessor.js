@@ -22,7 +22,20 @@ function findYtDlp() {
     return 'yt-dlp';
 }
 
-async function getVideoMetadata(url) {
+function sanitizeUrl(url) {
+    try {
+        const u = new URL(url);
+        // Remove common tracking parameters
+        const paramsToRemove = ['si', 'feature', 'utm_source', 'utm_medium', 'utm_campaign'];
+        paramsToRemove.forEach(p => u.searchParams.delete(p));
+        return u.toString();
+    } catch (e) {
+        return url;
+    }
+}
+
+async function getVideoMetadata(rawUrl) {
+    const url = sanitizeUrl(rawUrl);
     // 1. Define args first
     const args = [
         '--dump-single-json',
@@ -117,7 +130,8 @@ async function getVideoMetadata(url) {
     });
 }
 
-async function downloadVideo(url, format, quality, jobId) {
+async function downloadVideo(rawUrl, format, quality, jobId) {
+    const url = sanitizeUrl(rawUrl);
     const tempDir = path.join(__dirname, '../temp');
     const outputPath = path.join(tempDir, `${jobId}.%(ext)s`);
     const args = [
