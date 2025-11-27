@@ -36,114 +36,125 @@ function sanitizeUrl(url) {
 
 async function getVideoMetadata(rawUrl) {
     const url = sanitizeUrl(rawUrl);
-    // 1. Define args first
-    const args = [
-        '--dump-single-json',
-        '--flat-playlist',
-        '--no-warnings',
-        '--extractor-args', 'youtube:player_client=android',
-        url
-    ];
+    const isYoutube = url.includes('youtube.com') || url.includes('youtu.be');
 
-    // 2. Handle Cookies
-    let cookiePath = null;
-    if (process.env.COOKIES_CONTENT) {
-        try {
-            const tempId = uuidv4();
-            const tempDir = path.join(__dirname, '../temp');
-            try { await fs.mkdir(tempDir, { recursive: true }); } catch (e) { }
+    const executeFetch = (useCookies) => {
+        return new Promise(async (resolve, reject) => {
+            const args = [
+                '--dump-single-json',
+                '--flat-playlist',
+                '--no-warnings',
+                url
+            ];
 
-            cookiePath = path.join(tempDir, `cookies_meta_${tempId}.txt`);
-            await fs.writeFile(cookiePath, process.env.COOKIES_CONTENT);
-            // Insert cookies before the URL (last argument)
-            args.splice(args.length - 1, 0, '--cookies', cookiePath);
-        } catch (err) {
-            console.error('Failed to write cookie file for metadata:', err);
-        }
-    }
-
-    return new Promise((resolve, reject) => {
-        console.log(`Fetching metadata for: ${url}`);
-        const ytdlp = spawn(findYtDlp(), args);
-        let stdout = '';
-        let stderr = '';
-
-        // Set a timeout of 30 seconds
-        const timeout = setTimeout(() => {
-            ytdlp.kill();
-            if (cookiePath) fs.unlink(cookiePath).catch(() => { });
-            reject(new Error('Metadata fetch timed out (30s limit)'));
-        }, 30000);
-
-        ytdlp.stdout.on('data', d => stdout += d);
-        ytdlp.stderr.on('data', d => stderr += d);
-
-        ytdlp.on('close', code => {
-            clearTimeout(timeout);
-            if (cookiePath) fs.unlink(cookiePath).catch(() => { }); // Cleanup
-
-            if (code !== 0) {
-                console.error(`Metadata fetch failed for ${url}. Exit code: ${code}`);
-                console.error(`Stderr: ${stderr}`);
-                return reject(new Error(stderr || 'Failed to fetch metadata'));
+            if (isYoutube) {
+                args.splice(args.length - 1, 0, '--extractor-args', 'youtube:player_client=android');
             }
-            if (!stdout) return reject(new Error('No metadata received'));
 
-            try {
-                const m = JSON.parse(stdout);
+            let cookiePath = null;
+            if (useCookies && process.env.COOKIES_CONTENT) {
+                try {
+                    const tempId = uuidv4();
+                    const tempDir = path.join(__dirname, '../temp');
+                    try { await fs.mkdir(tempDir, { recursive: true }); } catch (e) { }
 
-                if (m._type === 'playlist' && m.entries) {
-                    // It's a playlist
-                    const videos = m.entries.map(entry => ({
-                        title: entry.title,
-                        id: entry.id,
-                        duration: entry.duration,
-                        uploader: entry.uploader,
-                        url: entry.url || `https://www.youtube.com/watch?v=${entry.id}` // Fallback for YT
-                    }));
-
-                    resolve({
-                        type: 'playlist',
-                        title: m.title,
-                        count: m.entries.length,
-                        videos: videos
-                    });
-                } else {
-                    // It's a single video
-                    resolve({
-                        type: 'video',
-                        title: m.title,
-                        duration: m.duration,
-                        thumbnail: m.thumbnail,
-                        uploader: m.uploader,
-                        view_count: m.view_count,
-                        description: m.description,
-                        url: url
-                    });
+                    cookiePath = path.join(tempDir, `cookies_meta_${tempId}.txt`);
+                    await fs.writeFile(cookiePath, process.env.COOKIES_CONTENT);
+                    args.splice(args.length - 1, 0, '--cookies', cookiePath);
+                } catch (err) {
+                    console.error('Failed to write cookie file for metadata:', err);
                 }
-            } catch (e) {
-                console.error('JSON Parse Error:', e);
-                console.error('Stdout was:', stdout);
-                reject(new Error('Parse error'));
             }
+
+            console.log(`Fetching metadata for: ${url} (Cookies: ${!!cookiePath})`);
+            const ytdlp = spawn(findYtDlp(), args);
+            let stdout = '';
+            let stderr = '';
+
+            const timeout = setTimeout(() => {
+                ytdlp.kill();
+                if (cookiePath) fs.unlink(cookiePath).catch(() => { });
+                reject(new Error('Metadata fetch timed out (30s limit)'));
+            }, 30000);
+
+            ytdlp.stdout.on('data', d => stdout += d);
+            ytdlp.stderr.on('data', d => stderr += d);
+
+            ytdlp.on('close', code => {
+                clearTimeout(timeout);
+                if (cookiePath) fs.unlink(cookiePath).catch(() => { });
+
+                if (code !== 0) {
+                    // Special handling: If we used cookies and failed, reject with specific error to trigger retry
+                    if (useCookies) {
+                        return reject(new Error('RetryWithoutCookies'));
+                    }
+                    console.error(`Metadata fetch failed for ${url}. Exit code: ${code}`);
+                    console.error(`Stderr: ${stderr}`);
+                    return reject(new Error(stderr || 'Failed to fetch metadata'));
+                }
+                if (!stdout) return reject(new Error('No metadata received'));
+
+                try {
+                    const m = JSON.parse(stdout);
+
+                    if (m._type === 'playlist' && m.entries) {
+                        const videos = m.entries.map(entry => ({
+                            title: entry.title,
+                            id: entry.id,
+                            duration: entry.duration,
+                            uploader: entry.uploader,
+                            url: entry.url || `https://www.youtube.com/watch?v=${entry.id}`
+                        }));
+                        resolve({ type: 'playlist', title: m.title, count: m.entries.length, videos: videos });
+                    } else {
+                        resolve({
+                            type: 'video',
+                            title: m.title,
+                            duration: m.duration,
+                            thumbnail: m.thumbnail,
+                            uploader: m.uploader,
+                            view_count: m.view_count,
+                            description: m.description,
+                            url: url
+                        });
+                    }
+                } catch (e) {
+                    console.error('JSON Parse Error:', e);
+                    reject(new Error('Parse error'));
+                }
+            });
         });
-    });
+    };
+
+    try {
+        // Try with cookies first if available
+        if (process.env.COOKIES_CONTENT) {
+            return await executeFetch(true);
+        } else {
+            return await executeFetch(false);
+        }
+    } catch (error) {
+        if (error.message === 'RetryWithoutCookies') {
+            console.log('⚠️ Metadata fetch with cookies failed. Retrying without cookies...');
+            return await executeFetch(false);
+        }
+        throw error;
+    }
 }
 
 async function downloadVideo(rawUrl, format, quality, jobId) {
     const url = sanitizeUrl(rawUrl);
     const tempDir = path.join(__dirname, '../temp');
     const outputPath = path.join(tempDir, `${jobId}.%(ext)s`);
+
     const args = [
         '--no-playlist',
         '-f', getFormatString(format, quality),
         '-o', outputPath,
         '--newline',
-        '-N', '4', // Use 4 concurrent connections
-        '--newline',
-        '-N', '4', // Use 4 concurrent connections
-        '--resize-buffer', // Resize buffer for speed
-        '--extractor-args', 'youtube:player_client=android', // Impersonate Android app to bypass bot check
+        '-N', '4',
+        '--resize-buffer',
         '--force-ipv4',
         url
     ];
@@ -151,13 +162,18 @@ async function downloadVideo(rawUrl, format, quality, jobId) {
     if (format === 'mp4') args.splice(3, 0, '--merge-output-format', 'mp4');
     if (quality === 'audio') args.splice(3, 0, '-x', '--audio-format', 'mp3');
 
+    // Only add Android client for YouTube
+    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        args.splice(args.length - 1, 0, '--extractor-args', 'youtube:player_client=android');
+    }
+
     // Handle Cookies
     let cookiePath = null;
     if (process.env.COOKIES_CONTENT) {
+        console.log('🍪 Cookies found in environment variables (download). Length:', process.env.COOKIES_CONTENT.length);
         try {
             cookiePath = path.join(tempDir, `cookies_${jobId}.txt`);
             await fs.writeFile(cookiePath, process.env.COOKIES_CONTENT);
-            // Insert cookies before the URL (last argument)
             args.splice(args.length - 1, 0, '--cookies', cookiePath);
         } catch (err) {
             console.error('Failed to write cookie file:', err);
@@ -170,16 +186,11 @@ async function downloadVideo(rawUrl, format, quality, jobId) {
 
         ytdlp.stdout.on('data', data => {
             const output = data.toString();
-            // console.log(`[${jobId}] stdout:`, output); // Uncomment for verbose logs
-
-            // Match percentage (e.g., " 23.5%" or " 100%")
             const m = output.match(/(\d+(?:\.\d+)?)%/);
             if (m) {
                 const progress = Math.min(100, Math.floor(parseFloat(m[1])));
                 updateJobProgress(jobId, progress, progress === 100 ? 'Finalizing...' : 'Downloading...');
             }
-
-            // Detect merging/conversion phase
             if (output.includes('[Merger]') || output.includes('[Fixup]')) {
                 updateJobProgress(jobId, 100, 'Converting & Merging...');
             }
@@ -192,13 +203,13 @@ async function downloadVideo(rawUrl, format, quality, jobId) {
         ytdlp.on('error', (err) => {
             console.error(`[${jobId}] Spawn error:`, err);
             updateJobStatus(jobId, 'failed');
-            if (cookiePath) fs.unlink(cookiePath).catch(() => { }); // Cleanup
+            if (cookiePath) fs.unlink(cookiePath).catch(() => { });
             reject(new Error(`Failed to start download process: ${err.message}`));
         });
 
         ytdlp.on('close', async code => {
             console.log(`[${jobId}] Process exited with code ${code}`);
-            if (cookiePath) fs.unlink(cookiePath).catch(() => { }); // Cleanup cookies
+            if (cookiePath) fs.unlink(cookiePath).catch(() => { });
 
             if (code !== 0) {
                 updateJobStatus(jobId, 'failed');
@@ -209,14 +220,12 @@ async function downloadVideo(rawUrl, format, quality, jobId) {
                 const files = await fs.readdir(tempDir);
                 const file = files.find(f => f.startsWith(jobId));
                 if (!file) {
-                    console.error(`[${jobId}] File not found in ${tempDir}. Files: ${files.join(', ')}`);
                     updateJobStatus(jobId, 'failed');
                     return reject(new Error('File not found after download'));
                 }
                 updateJobComplete(jobId, file);
                 resolve(path.join(tempDir, file));
             } catch (e) {
-                console.error(`[${jobId}] File check error:`, e);
                 updateJobStatus(jobId, 'failed');
                 reject(e);
             }
