@@ -435,7 +435,7 @@ function startProgressPolling() {
                 progressPercent.textContent = `${percent}%`;
                 progressFill.style.width = `${percent}%`;
                 progressStatus.textContent = 'Downloading & Converting...';
-            } else if (data.status === 'completed') {
+            } else if (data.status === 'ready' || data.status === 'completed') {
                 clearInterval(pollInterval);
                 finishDownload(data.downloadUrl);
             } else if (data.status === 'error') {
