@@ -158,6 +158,7 @@ async function downloadVideo(rawUrl, format, quality, jobId) {
     return new Promise((resolve, reject) => {
         console.log(`[${jobId}] Starting download (YouTube: ${isYoutube}, Cookies: ${!!cookiePath})`);
         const ytdlp = spawn(findYtDlp(), args);
+        let stderrData = '';
 
         ytdlp.stdout.on('data', data => {
             const output = data.toString();
@@ -172,12 +173,14 @@ async function downloadVideo(rawUrl, format, quality, jobId) {
         });
 
         ytdlp.stderr.on('data', data => {
-            console.error(`[${jobId}] stderr:`, data.toString());
+            const errText = data.toString();
+            stderrData += errText;
+            console.error(`[${jobId}] stderr:`, errText);
         });
 
         ytdlp.on('error', (err) => {
             console.error(`[${jobId}] Spawn error:`, err);
-            updateJobStatus(jobId, 'failed');
+            updateJobWithError(jobId, `Failed to start download process: ${err.message}`);
             if (cookiePath) fs.unlink(cookiePath).catch(() => { });
             reject(new Error(`Failed to start download process: ${err.message}`));
         });
@@ -187,21 +190,22 @@ async function downloadVideo(rawUrl, format, quality, jobId) {
             if (cookiePath) fs.unlink(cookiePath).catch(() => { });
 
             if (code !== 0) {
-                updateJobStatus(jobId, 'failed');
-                return reject(new Error('Download failed'));
+                const errorMsg = stderrData || 'Download failed';
+                updateJobWithError(jobId, errorMsg);
+                return reject(new Error(errorMsg));
             }
 
             try {
                 const files = await fs.readdir(tempDir);
                 const file = files.find(f => f.startsWith(jobId));
                 if (!file) {
-                    updateJobStatus(jobId, 'failed');
+                    updateJobWithError(jobId, 'File not found after download');
                     return reject(new Error('File not found after download'));
                 }
                 updateJobComplete(jobId, file);
                 resolve(path.join(tempDir, file));
             } catch (e) {
-                updateJobStatus(jobId, 'failed');
+                updateJobWithError(jobId, e.message);
                 reject(e);
             }
         });
@@ -216,7 +220,7 @@ function getFormatString(format, quality) {
 
 function createJob(url, format, quality) {
     const jobId = uuidv4();
-    jobs.set(jobId, { id: jobId, url, format, quality, status: 'queued', progress: 0, statusText: 'Queued...', downloadUrl: null, createdAt: Date.now() });
+    jobs.set(jobId, { id: jobId, url, format, quality, status: 'queued', progress: 0, statusText: 'Queued...', downloadUrl: null, error: null, createdAt: Date.now() });
     processJob(jobId);
     return jobId;
 }
@@ -253,9 +257,18 @@ function updateJobComplete(jobId, filename) {
     }
 }
 
+function updateJobWithError(jobId, errorMessage) {
+    const job = jobs.get(jobId);
+    if (job) {
+        job.status = 'failed';
+        job.error = errorMessage;
+        job.statusText = 'Failed';
+    }
+}
+
 function getJobStatus(jobId) {
     const job = jobs.get(jobId);
-    return job ? { status: job.status, progress: job.progress, statusText: job.statusText, downloadUrl: job.downloadUrl } : null;
+    return job ? { status: job.status, progress: job.progress, statusText: job.statusText, downloadUrl: job.downloadUrl, error: job.error } : null;
 }
 
 setInterval(() => {

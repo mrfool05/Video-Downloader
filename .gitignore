@@ -20,3 +20,7 @@ backend/downloads/
 *.webm
 *.part
 *.ytdl
+
+# Cookies (sensitive)
+cookies.txt
+**/cookies*.txt

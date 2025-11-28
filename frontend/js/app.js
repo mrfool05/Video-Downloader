@@ -438,9 +438,9 @@ function startProgressPolling() {
             } else if (data.status === 'ready' || data.status === 'completed') {
                 clearInterval(pollInterval);
                 finishDownload(data.downloadUrl);
-            } else if (data.status === 'error') {
+            } else if (data.status === 'failed' || data.status === 'error') {
                 clearInterval(pollInterval);
-                showError('Download failed: ' + (data.error || 'Unknown error'));
+                showError(data.error || 'Download failed. Please try again.');
                 resetUI();
             }
         } catch (error) {
